@@ -1033,27 +1033,66 @@ mod tests {
         let Some(host) = host() else {
             return; // no host GPU here
         };
+
+        eprintln!("mesh shader support: {}", host.mesh_shaders());
+
+        if !host.mesh_shaders() {
+            eprintln!("no host mesh shader support; skipped");
+            return;
+        }
+
         let Some(dxc) = dxc() else {
             eprintln!("no PC dxc.exe; skipped");
             return;
         };
+
         let dir = tempfile::tempdir().unwrap();
         let ms = compile(&dxc, dir.path(), MS, "ms_6_5");
         let ps = compile(&dxc, dir.path(), PS, "ps_6_5");
-        let (root, root_blob) = root_signature(&host.device, &[], &[], false).unwrap();
+
+        let (root, root_blob) =
+            root_signature(&host.device, &[], &[], false).unwrap();
+
         let mut g = GraphicsState::default();
         g.targets.NumRenderTargets = 1;
         g.targets.RTFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-        let name = super::super::library::name("mesh test", &root_blob, &[&ms, &ps], &g.describe());
-        mesh_pipeline(&host.device, &root, code(&ms), code(&ps), &g, false, &name).expect("made");
+
+        let name = super::super::library::name(
+            "mesh test",
+            &root_blob,
+            &[&ms, &ps],
+            &g.describe(),
+        );
+
+        mesh_pipeline(
+            &host.device,
+            &root,
+            code(&ms),
+            code(&ps),
+            &g,
+            false,
+            &name,
+        )
+        .expect("made");
+
         let loaded = super::super::library::LOADED.load(Ordering::Relaxed);
-        mesh_pipeline(&host.device, &root, code(&ms), code(&ps), &g, false, &name).expect("made again");
+
+        mesh_pipeline(
+            &host.device,
+            &root,
+            code(&ms),
+            code(&ps),
+            &g,
+            false,
+            &name,
+        )
+        .expect("made again");
+
         assert!(
             super::super::library::LOADED.load(Ordering::Relaxed) > loaded,
             "the mesh pipeline was compiled again instead of loaded from the library"
         );
     }
-
     const VS: &str = "float4 main(uint i : SV_VertexID) : SV_Position {
         float2 p = float2((i << 1) & 2, i & 2);
         return float4(p * 2.0 - 1.0, 0.5, 1.0);
